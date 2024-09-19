@@ -83,10 +83,6 @@ jobs:
               ],
               networkMode: "awsvpc",
               placementConstraints: [],
-              compatibilities: [
-                  "EC2",
-                  "FARGATE"
-              ],
               requiresCompatibilities: [
                   "FARGATE"
               ],
