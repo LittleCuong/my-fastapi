@@ -50,6 +50,8 @@ jobs:
                 {
                   name: "simple-fastapi-container",
                   image: $IMAGE,
+                  cpu: 0,
+                  memory: 3072,
                   portMappings: [
                     {
                       name: "simple-fastapi-container-8000-tcp",
@@ -88,8 +90,6 @@ jobs:
               requiresCompatibilities: [
                   "FARGATE"
               ],
-              cpu: 0,
-              memory: 3072,
               taskRoleArn: "arn:aws:iam::767397773214:role/ecsTaskExecutionRole",
               executionRoleArn: "arn:aws:iam::767397773214:role/ecsTaskExecutionRole"
             }' <<< '{}')
