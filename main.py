@@ -11,6 +11,10 @@ def read_root():
 def new_api():
     return {"message": "Hello, This is new API!"}
 
+@app.get("/geralt")
+def geralt_api():
+    return {"message": "Geralt Of Rivia!"}
+
 @app.get("/items/{item_id}")
 def read_item(item_id: int, q: str = None):
     return {"item_id": item_id, "q": q}
