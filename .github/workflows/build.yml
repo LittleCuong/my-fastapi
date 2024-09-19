@@ -1,3 +1,45 @@
+# name: Push the Docker image to AWS ECR Repo
+# on:
+#   push:
+#     branches:
+#       - main
+
+# jobs:
+#   Build:
+#     name: Build
+#     runs-on: ubuntu-latest
+#     steps:
+#       - name: Checkout
+#         uses: actions/checkout@v3
+
+#       - name: Configure AWS credentials
+#         uses: aws-actions/configure-aws-credentials@v1
+#         with:
+#           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+#           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+#           aws-region: ap-southeast-2
+
+#       - name: Login to Amazon ECR
+#         id: login-ecr
+#         uses: aws-actions/amazon-ecr-login@v1
+
+#       - name: Get commit hash
+#         id: get-commit-hash
+#         run: echo "::set-output name=commit-hash::$(git rev-parse --short HEAD)"
+#       - name: Get timestamp
+#         id: get-timestamp
+#         run: echo "::set-output name=timestamp::$(date +'%Y-%m-%d-%H-%M')"
+
+#       - name: Build, tag, and push the image to Amazon ECR
+#         id: build-image
+#         env:
+#           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+#           ECR_REPOSITORY: ${{ secrets.REPO_NAME }}
+#           IMAGE_TAG: ${{ steps.get-commit-hash.outputs.commit-hash }}-${{ steps.get-timestamp.outputs.timestamp }}
+#         run: |
+#           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+#           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
 name: Push the Docker image to AWS ECR Repo
 on:
   push:
@@ -25,17 +67,41 @@ jobs:
 
       - name: Get commit hash
         id: get-commit-hash
-        run: echo "::set-output name=commit-hash::$(git rev-parse --short HEAD)"
+        run: echo "commit-hash=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+
       - name: Get timestamp
         id: get-timestamp
-        run: echo "::set-output name=timestamp::$(date +'%Y-%m-%d-%H-%M')"
+        run: echo "timestamp=$(date +'%Y-%m-%d-%H-%M')" >> $GITHUB_ENV
 
       - name: Build, tag, and push the image to Amazon ECR
-        id: build-image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           ECR_REPOSITORY: ${{ secrets.REPO_NAME }}
-          IMAGE_TAG: ${{ steps.get-commit-hash.outputs.commit-hash }}-${{ steps.get-timestamp.outputs.timestamp }}
+          IMAGE_TAG: ${{ env.commit-hash }}-${{ env.timestamp }}
         run: |
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+      - name: Update ECS task definition
+        env:
+          AWS_REGION: ap-southeast-2
+          ECS_CLUSTER: ${{ secrets.ECS_CLUSTER }}
+          ECS_SERVICE: ${{ secrets.ECS_SERVICE }}
+          ECR_IMAGE: ${{ steps.login-ecr.outputs.registry }}/${{ secrets.REPO_NAME }}:${{ env.commit-hash }}-${{ env.timestamp }}
+        run: |
+          # Get the current task definition
+          CURRENT_TASK_DEFINITION=$(aws ecs describe-task-definition --task-definition $ECS_SERVICE --region $AWS_REGION)
+
+          # Update the image in the task definition
+          NEW_TASK_DEFINITION=$(echo $CURRENT_TASK_DEFINITION | jq --arg IMAGE "$ECR_IMAGE" '.taskDefinition | .containerDefinitions[0].image=$IMAGE | del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities)')
+
+          # Register the new task definition
+          NEW_REVISION=$(aws ecs register-task-definition --cli-input-json "$NEW_TASK_DEFINITION" --region $AWS_REGION --query 'taskDefinition.taskDefinitionArn' --output text)
+
+      - name: Update ECS service
+        env:
+          AWS_REGION: ap-southeast-2
+          ECS_CLUSTER: ${{ secrets.ECS_CLUSTER }}
+          ECS_SERVICE: ${{ secrets.ECS_SERVICE }}
+        run: |
+          aws ecs update-service --cluster $ECS_CLUSTER --service $ECS_SERVICE --task-definition $NEW_REVISION --region $AWS_REGION
