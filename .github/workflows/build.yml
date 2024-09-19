@@ -50,6 +50,9 @@ jobs:
                 {
                   name: "simple-fastapi-container",
                   image: $IMAGE,
+                  cpu: 0,
+                  memory: 3072,
+                  memoryReservation: 1024,  # Set memory reservation if needed
                   portMappings: [
                     {
                       name: "simple-fastapi-container-8000-tcp",
