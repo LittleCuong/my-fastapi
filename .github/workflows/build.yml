@@ -43,7 +43,46 @@ jobs:
       - name: Register new task definition
         id: register-task-def
         run: |
-          TASK_DEFINITION_JSON=$(jq --arg IMAGE "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" '.containerDefinitions[0].image = $IMAGE' task-definition.json)
+          TASK_DEFINITION_JSON=$(jq --arg IMAGE "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" \
+            '{
+              family: "my-simple-fastapi",
+              containerDefinitions: [
+                {
+                  name: "simple-fastapi-container",
+                  image: $IMAGE,
+                  portMappings: [
+                    {
+                      name: "simple-fastapi-container-8000-tcp",
+                      containerPort: 8000,
+                      hostPort: 8000,
+                      protocol: "tcp",
+                      appProtocol: "http"
+                    }
+                  ],
+                  essential: true,
+                  logConfiguration: {
+                    logDriver: "awslogs",
+                    options: {
+                      "awslogs-group": "/ecs/my-simple-fastapi",
+                      "awslogs-region": "ap-southeast-2",
+                      "awslogs-stream-prefix": "ecs",
+                      "awslogs-create-group": "true",
+                      "max-buffer-size": "25m",
+                      mode: "non-blocking"
+                    }
+                  },
+                  environment: [],
+                  environmentFiles: [],
+                  mountPoints: [],
+                  volumesFrom: [],
+                  ulimits: [],
+                  systemControls: []
+                }
+              ],
+              networkMode: "awsvpc",
+              taskRoleArn: "arn:aws:iam::767397773214:role/ecsTaskExecutionRole",
+              executionRoleArn: "arn:aws:iam::767397773214:role/ecsTaskExecutionRole"
+            }' <<< '{}')
           echo "$TASK_DEFINITION_JSON" > updated-task-definition.json
           aws ecs register-task-definition \
             --cli-input-json file://updated-task-definition.json \
